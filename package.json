@@ -1,0 +1,15 @@
+{
+  "name": "goatedit-project-templates",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Whole-project templates for GoatEdit: edits with their footage, pictures and 3D models, streamed from this repository.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "validate": "node scripts/build.mjs --check",
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/build.mjs --local && node scripts/serve.mjs"
+  }
+}

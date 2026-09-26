@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoatEdit Templates</title>
+    <meta name="description" content="Whole edits made in GoatEdit — footage, 3D, effects and all. Watch one, then open it in the editor as your own project." />
+    <link rel="icon" href="mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="gallery.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap top__row">
+        <a class="brand" href="./"><img src="mark.svg" alt="" width="28" height="27" /> GoatEdit <span>Templates</span></a>
+        <a class="btn" href="https://ai.goatedit.com">Open the editor</a>
+      </div>
+      <div class="wrap hero">
+        <h1>Start from an edit that already works.</h1>
+        <p>Every template is a real GoatEdit project: timeline, effects, 3D models and footage. Watch it here, open it in the editor, and make it yours. Nothing to download: the files stream straight from the gallery.</p>
+      </div>
+    </header>
+
+    <div class="wrap controls">
+      <input id="q" type="search" placeholder="Search templates" autocomplete="off" aria-label="Search templates" />
+      <div id="shapes" class="chips" role="group" aria-label="Filter by shape"></div>
+      <div id="tags" class="chips" role="group" aria-label="Filter by tag"></div>
+    </div>
+
+    <main class="wrap">
+      <p id="count" class="count"></p>
+      <div id="grid" class="grid"></div>
+      <p id="empty" class="empty" hidden>No templates match.</p>
+    </main>
+
+    <dialog id="viewer" class="viewer">
+      <div class="viewer__media"><video id="viewer-video" controls loop playsinline></video></div>
+      <div class="viewer__body">
+        <h2 id="viewer-name"></h2>
+        <p id="viewer-by" class="muted"></p>
+        <p id="viewer-desc"></p>
+        <p id="viewer-meta" class="muted small"></p>
+        <div class="viewer__actions">
+          <a id="viewer-open" class="btn btn--primary" target="_blank" rel="noopener">Open in GoatEdit</a>
+          <a id="viewer-src" class="btn" target="_blank" rel="noopener">Files on GitHub</a>
+          <button id="viewer-close" class="btn" type="button">Close</button>
+        </div>
+      </div>
+    </dialog>
+
+    <footer class="wrap foot muted small">
+      Made something good? In GoatEdit use <b>File ▸ Export as Template</b>, then open a pull request here.
+      Each template carries its own licence; check it before you publish work made from one.
+    </footer>
+
+    <script src="gallery.js" type="module"></script>
+  </body>
+</html>
