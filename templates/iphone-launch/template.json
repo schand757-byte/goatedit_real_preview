@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "iphone-launch",
+  "name": "Iphone launch",
+  "description": "iphone",
+  "author": "Goat",
+  "license": "CC-BY-4.0",
+  "tags": [
+    "iphone 3d"
+  ],
+  "width": 3840,
+  "height": 2160,
+  "fps": 60,
+  "duration": 10.09,
+  "preview": "preview.mp4"
+}
