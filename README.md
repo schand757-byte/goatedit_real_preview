@@ -33,22 +33,18 @@ template keeps working however the repository changes later.
 
 ## Adding a template
 
-1. Make the edit in GoatEdit and export it as a video — that is its preview.
-2. **File ▸ Export as Template**. Fill in the name, author, tags and licence,
-   choose the preview video, then pick this repository's folder (or its
-   `templates/` folder). It writes `templates/<id>/`.
-3. Check it: `npm run validate`, and `npm run preview` to see the gallery with
-   it (see below).
-4. Commit and push (or open a pull request):
+In GoatEdit: **File ▸ Publish as Template**. Fill in the name, author, tags and
+licence, choose the preview video (the edit exported as MP4), and press
+Publish. The editor uploads the files to a private staging store, and the
+editor's `/api/templates/publish` route commits `templates/<id>/` here:
 
-   ```bash
-   git add templates/<id>
-   git commit -m "Add <id>"
-   git push
-   ```
+- straight to `main` for an admin (emails listed in the editor deployment's
+  `TEMPLATES_ADMIN_EMAILS`) — live a couple of minutes later;
+- as a pull request for anyone else — merge it to publish.
 
-A few minutes later it is on the gallery page and in the editor's
-**Templates** list.
+Maintainers can still add one by hand: in the dialog, **Save as folder
+instead** writes the same folder; put it in `templates/`, check it with
+`npm run validate`, commit and push.
 
 ## Limits
 
