@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "iphone-launch-2",
+  "name": "Iphone launch",
+  "description": "",
+  "author": "dw",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "width": 3840,
+  "height": 2160,
+  "fps": 60,
+  "duration": 10.4,
+  "preview": "preview.mp4"
+}
