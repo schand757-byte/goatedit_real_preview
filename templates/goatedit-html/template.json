@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "goatedit-html",
+  "name": "goatedit html",
+  "description": "",
+  "author": "dw",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "duration": 8,
+  "preview": "preview.mp4"
+}
