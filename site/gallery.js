@@ -26,7 +26,12 @@ const NEW_FOR = 7 * 24 * 3600 * 1000;
 let templates = [];
 let shown = [];
 let activeShape = null;
-const activeTags = new Set();
+let activeCat = null;
+const activeStyles = new Set();
+let activeSwap = null;
+// Labels come from index.json; these are only what shows before it loads.
+let CATEGORIES = [];
+let STYLES = [];
 let current = null;
 /** Whether the open viewer added the history entry it is showing. */
 let pushed = false;
@@ -61,6 +66,29 @@ const SHAPES = [
   { id: '1:1', label: 'Square', w: 12, h: 12 },
   { id: '4:5', label: 'Feed', w: 10, h: 12.5 },
 ];
+
+const catLabel = id => CATEGORIES.find(c => c.id === id)?.label ?? '';
+const styleLabel = id => STYLES.find(c => c.id === id)?.label ?? id;
+
+/** What someone brings to make it theirs: the filter for "I have no footage". */
+const SWAPS = [
+  { id: 'text', label: 'Just edit text' },
+  { id: 'footage', label: 'Your footage' },
+  { id: 'images', label: 'Your images' },
+];
+function swap(t) {
+  const s = t.slots;
+  if (!s) return null;
+  return s.footage ? 'footage' : s.images ? 'images' : 'text';
+}
+function swapLine(t) {
+  const s = t.slots;
+  if (!s) return null;
+  const n = (c, one, many) => `${c} ${c === 1 ? one : many}`;
+  if (s.footage) return `Your footage · ${n(s.footage, 'clip', 'clips')}`;
+  if (s.images) return `Your images · ${n(s.images, 'image', 'images')}`;
+  return s.texts ? `Just edit text · ${n(s.texts, 'layer', 'layers')}` : 'Nothing to swap';
+}
 
 function shape(t) {
   const r = t.width / t.height;
@@ -197,7 +225,7 @@ function makeCard(t) {
       avatar(t.author),
       el('div', { class: 'card__text' },
         el('div', { class: 'card__name', text: t.name }),
-        el('div', { class: 'card__by', text: t.author }))),
+        el('div', { class: 'card__by', text: [t.author, catLabel(t.category)].filter(Boolean).join(' · ') }))),
   );
   card.__card = api;
   playing.observe(card);
@@ -254,11 +282,35 @@ function renderFilters() {
       onclick: () => { activeShape = activeShape === s.id ? null : s.id; apply(); },
     }, el('i', { style: { width: `${s.w * 0.9}px`, height: `${s.h * 0.9}px` } }), s.label)),
   );
-  const tags = [...new Set(templates.flatMap(t => t.tags))].sort();
-  $('tags').replaceChildren(...tags.map(x => el('button', {
-    class: 'chip', type: 'button', 'aria-pressed': String(activeTags.has(x)), text: `#${x}`,
-    onclick: () => { activeTags.has(x) ? activeTags.delete(x) : activeTags.add(x); apply(); },
-  })));
+  // Only what something is filed under: a chip that matches nothing is a dead end.
+  const count = id => templates.filter(t => t.category === id).length;
+  const cats = CATEGORIES.filter(c => count(c.id));
+  $('cats').replaceChildren(
+    el('button', { type: 'button', 'aria-pressed': String(!activeCat), onclick: () => { activeCat = null; apply(); } }, 'All'),
+    ...cats.map(c => el('button', {
+      type: 'button', 'aria-pressed': String(activeCat === c.id),
+      onclick: () => { activeCat = activeCat === c.id ? null : c.id; apply(); },
+    }, c.label, el('sup', { text: String(count(c.id)) }))),
+  );
+
+  const styles = STYLES.filter(st => templates.some(t => t.styles?.includes(st.id)));
+  const swaps = SWAPS.filter(w => templates.some(t => swap(t) === w.id));
+  const chip = (label, on, onclick) => el('button', { class: 'chip', type: 'button', 'aria-pressed': String(on), text: label, onclick });
+  $('tags').replaceChildren(...[
+    ...styles.map(st => chip(st.label, activeStyles.has(st.id), () => {
+      activeStyles.has(st.id) ? activeStyles.delete(st.id) : activeStyles.add(st.id); apply();
+    })),
+    styles.length && swaps.length ? el('span', { class: 'chips__sep', 'aria-hidden': 'true' }) : null,
+    ...swaps.map(w => chip(w.label, activeSwap === w.id, () => { activeSwap = activeSwap === w.id ? null : w.id; apply(); })),
+  ].filter(Boolean));
+}
+
+/** Everything a search can match: the words on the card, and what is inside it. */
+function haystack(t) {
+  return [
+    t.name, t.description, t.author, catLabel(t.category), ...t.tags,
+    ...(t.styles ?? []).map(styleLabel), ...(t.uses ?? []), swapLine(t) ?? '',
+  ].join(' ').toLowerCase();
 }
 
 function apply() {
@@ -266,13 +318,15 @@ function apply() {
   const words = q.split(/\s+/).filter(Boolean);
   shown = templates.filter(t => {
     if (activeShape && shape(t) !== activeShape) return false;
-    if (![...activeTags].every(x => t.tags.includes(x))) return false;
-    const hay = `${t.name} ${t.description} ${t.author} ${t.tags.join(' ')}`.toLowerCase();
+    if (activeCat && t.category !== activeCat) return false;
+    if (![...activeStyles].every(x => t.styles?.includes(x))) return false;
+    if (activeSwap && swap(t) !== activeSwap) return false;
+    const hay = haystack(t);
     return words.every(w => hay.includes(w));
   });
   renderFilters();
   layout();
-  const filtered = q || activeShape || activeTags.size;
+  const filtered = q || activeShape || activeCat || activeStyles.size || activeSwap;
   $('count').textContent = filtered ? `${shown.length} of ${templates.length}` : `${templates.length} template${templates.length === 1 ? '' : 's'}`;
   $('empty').hidden = shown.length > 0;
   $('empty-text').textContent = templates.length ? 'Try fewer words or another filter.' : 'No templates have been published yet.';
@@ -282,7 +336,9 @@ function apply() {
 function clearFilters() {
   search.value = '';
   activeShape = null;
-  activeTags.clear();
+  activeCat = null;
+  activeStyles.clear();
+  activeSwap = null;
   apply();
 }
 $('clear').addEventListener('click', clearFilters);
@@ -340,7 +396,11 @@ function spec(label, value) {
 const LICENCE_NAMES = { 'CC-BY-4.0': 'CC BY 4.0', 'CC0-1.0': 'CC0 (free)', 'CC-BY-NC-4.0': 'CC BY-NC 4.0', MIT: 'MIT' };
 
 function related(t) {
-  const score = x => x.tags.filter(g => t.tags.includes(g)).length * 2 + (shape(x) === shape(t) ? 1 : 0) + (x.author === t.author ? 1 : 0);
+  const score = x =>
+    (t.category && x.category === t.category ? 3 : 0) +
+    (x.styles ?? []).filter(g => t.styles?.includes(g)).length * 2 +
+    x.tags.filter(g => t.tags.includes(g)).length +
+    (shape(x) === shape(t) ? 1 : 0) + (x.author === t.author ? 1 : 0);
   return templates.filter(x => x.id !== t.id).sort((a, b) => score(b) - score(a)).slice(0, 4);
 }
 
@@ -350,18 +410,23 @@ function openViewer(t, { push = true } = {}) {
   $('v-who').replaceChildren(avatar(t.author, true), el('div', {}, by, el('span', { text: t.addedAt ? `Published ${ago(t.addedAt)}` : 'Template' })));
   $('v-name').textContent = t.name;
   $('v-desc').textContent = t.description;
-  $('v-tags').replaceChildren(...t.tags.map(x => el('button', {
-    class: 'chip', type: 'button', text: `#${x}`,
-    onclick: () => { closeViewer(); activeTags.clear(); activeTags.add(x); apply(); $('browse').scrollIntoView(); },
-  })));
-  $('v-specs').replaceChildren(
+  // Each chip files the board the way it is labelled: a category or a style
+  // becomes that filter, a free tag becomes a search.
+  const jump = set => () => { closeViewer(); clearFilters(); set(); apply(); $('browse').scrollIntoView(); };
+  $('v-tags').replaceChildren(...[
+    t.category ? el('button', { class: 'chip', type: 'button', 'aria-pressed': 'true', text: catLabel(t.category), onclick: jump(() => { activeCat = t.category; }) }) : null,
+    ...(t.styles ?? []).map(x => el('button', { class: 'chip', type: 'button', text: styleLabel(x), onclick: jump(() => activeStyles.add(x)) })),
+    ...t.tags.map(x => el('button', { class: 'chip', type: 'button', text: `#${x}`, onclick: jump(() => { search.value = x; }) })),
+  ].filter(Boolean));
+  $('v-specs').replaceChildren(...[
+    swapLine(t) ? spec('You change', swapLine(t)) : null,
     spec('Frame', resolution(t)),
     spec('Rate', `${Math.round(t.fps * 100) / 100} fps`),
     spec('Length', time(t.duration)),
     spec('Files', t.bytes ? size(t.bytes) : '—'),
     spec('Shape', shape(t) === 'Other' ? `${t.width}:${t.height}` : shape(t)),
     spec('Licence', LICENCE_NAMES[t.license] ?? t.license),
-  );
+  ].filter(Boolean));
   const open = $('v-open');
   open.href = t.openUrl;
   open.target = '_blank';
@@ -467,6 +532,8 @@ try {
   if (!res.ok) throw new Error(String(res.status));
   const manifest = await res.json();
   templates = (manifest.templates ?? []).filter(t => t && t.id && t.width > 0 && t.height > 0);
+  CATEGORIES = Array.isArray(manifest.categories) ? manifest.categories : [];
+  STYLES = Array.isArray(manifest.styles) ? manifest.styles : [];
   $('eyebrow').textContent = templates.length ? `${templates.length} template${templates.length === 1 ? '' : 's'} · free to use` : 'Templates';
   buildWall();
   apply();

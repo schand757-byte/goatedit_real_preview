@@ -6,6 +6,17 @@
   "author": "dw",
   "license": "CC-BY-4.0",
   "tags": [],
+  "category": "promo",
+  "styles": [
+    "neon"
+  ],
+  "uses": [
+    "glow",
+    "light rays",
+    "blur",
+    "kinetic type",
+    "motion graphics"
+  ],
   "width": 1080,
   "height": 1920,
   "fps": 30,

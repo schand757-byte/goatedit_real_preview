@@ -6,6 +6,15 @@
   "author": "dw",
   "license": "CC-BY-4.0",
   "tags": [],
+  "category": "promo",
+  "styles": [
+    "3d",
+    "cinematic"
+  ],
+  "uses": [
+    "3d model",
+    "motion graphics"
+  ],
   "width": 3840,
   "height": 2160,
   "fps": 60,

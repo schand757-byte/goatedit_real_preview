@@ -43,6 +43,59 @@ const LICENSES = new Set(['CC-BY-4.0', 'CC0-1.0', 'CC-BY-NC-4.0', 'MIT']);
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const EDITOR = (process.env.EDITOR_URL ?? 'https://ai.goatedit.com').replace(/\/$/, '');
 
+// What a template is filed under. A copy of api/_lib/template-vocab.ts in the
+// editor, which validates what is published; it goes out in index.json so the
+// gallery page has one list to read labels from. Add to the end, never rename.
+const CATEGORIES = [
+  { id: 'intro', label: 'Intro' },
+  { id: 'logo-reveal', label: 'Logo reveal' },
+  { id: 'promo', label: 'Promo / Ad' },
+  { id: 'titles', label: 'Titles & lower thirds' },
+  { id: 'captions', label: 'Captions' },
+  { id: 'transitions', label: 'Transitions' },
+  { id: 'social', label: 'Social post' },
+  { id: 'slideshow', label: 'Slideshow' },
+];
+const STYLES = [
+  { id: 'minimal', label: 'Minimal' },
+  { id: 'neon', label: 'Neon' },
+  { id: 'cinematic', label: 'Cinematic' },
+  { id: 'retro', label: 'Retro' },
+  { id: 'glitch', label: 'Glitch' },
+  { id: '3d', label: '3D' },
+  { id: 'playful', label: 'Playful' },
+];
+const CATEGORY_IDS = new Set(CATEGORIES.map(c => c.id));
+const STYLE_IDS = new Set(STYLES.map(c => c.id));
+
+/**
+ * What someone brings to make it theirs, for a template published before the
+ * editor counted it: distinct footage and images the timeline uses, and its
+ * text layers other than captions.
+ */
+function countSlots(project) {
+  const byId = new Map((project.mediaFiles ?? []).map(m => [m.id, m]));
+  const footage = new Set();
+  const images = new Set();
+  let texts = 0;
+  const timelines = [project.timeline, ...(project.sequences ?? []).map(q => q.timeline)].filter(Boolean);
+  const seen = new Set();
+  for (const tl of timelines) {
+    for (const track of tl.tracks ?? []) {
+      if (track.type === 'audio') continue;
+      for (const c of track.clips ?? []) {
+        if (seen.has(c.id)) continue;
+        seen.add(c.id);
+        const m = byId.get(c.mediaFileId);
+        if (m?.type === 'video') footage.add(m.id);
+        if (m?.type === 'image') images.add(m.id);
+        if (c.text && !c.captionStyle && !c.wordTimings?.length) texts++;
+      }
+    }
+  }
+  return { footage: footage.size, images: images.size, texts };
+}
+
 const CACHE = join(ROOT, '.cache', 'cards');
 const CARD_WIDTH = 540;
 const CARD_SECONDS = 12;
@@ -143,6 +196,8 @@ async function readTemplate(id) {
     if (meta[k] && !files.has(meta[k])) bad(`template.json names ${k} "${meta[k]}", which is not in the folder`);
   }
   if (!meta.preview) warnings.push(`${id}: no preview video; its card will be blank`);
+  if (!CATEGORY_IDS.has(meta.category)) warnings.push(`${id}: no category, so it only shows under All`);
+  for (const st of meta.styles ?? []) if (!STYLE_IDS.has(st)) warnings.push(`${id}: style "${st}" is not one of ${[...STYLE_IDS].join(', ')}; dropped`);
 
   const bytes = [...used, meta.preview, meta.thumbnail].filter(Boolean).reduce((n, rel) => n + (files.get(rel) ?? 0), 0);
   return { id, meta, project, files, bytes };
@@ -249,6 +304,10 @@ async function main() {
       ...(meta.authorUrl ? { authorUrl: meta.authorUrl } : {}),
       license: meta.license,
       tags: Array.isArray(meta.tags) ? meta.tags : [],
+      ...(CATEGORY_IDS.has(meta.category) ? { category: meta.category } : {}),
+      styles: Array.isArray(meta.styles) ? meta.styles.filter(st => STYLE_IDS.has(st)).slice(0, 3) : [],
+      slots: meta.slots && typeof meta.slots === 'object' ? meta.slots : countSlots(project),
+      uses: Array.isArray(meta.uses) ? meta.uses : [],
       width: meta.width,
       height: meta.height,
       fps: meta.fps ?? 30,
@@ -271,6 +330,8 @@ async function main() {
     generatedAt: new Date().toISOString(),
     count: entries.length,
     tags: [...new Set(entries.flatMap(e => e.tags))].sort(),
+    categories: CATEGORIES,
+    styles: STYLES,
     templates: entries,
   };
   await writeFile(join(DIST, 'index.json'), JSON.stringify(manifest, null, 2));
