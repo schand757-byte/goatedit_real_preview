@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "goatedit-saas",
+  "name": "Goatedit SAAS",
+  "description": "",
+  "author": "God",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "category": "promo",
+  "styles": [
+    "neon",
+    "cinematic",
+    "minimal"
+  ],
+  "slots": {
+    "footage": 1,
+    "images": 0,
+    "texts": 20
+  },
+  "uses": [
+    "glow",
+    "kinetic type",
+    "motion blur",
+    "light rays",
+    "blur",
+    "masks",
+    "motion graphics"
+  ],
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "duration": 8,
+  "preview": "preview.mp4"
+}
