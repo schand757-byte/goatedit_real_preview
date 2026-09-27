@@ -3,6 +3,8 @@
 //
 //   dist/index.json      the list the editor and the gallery page read
 //   dist/t/<id>.json     each project, its "./assets/…" turned into links
+//   dist/c/<id>.mp4|jpg  each card's small looping clip and poster, cut from
+//                        the preview with ffmpeg (skipped when it is missing)
 //   dist/index.html …    the gallery page
 //
 // A template's files are never copied into dist/. Their links point into this
@@ -20,7 +22,7 @@
 //   node scripts/build.mjs --local   build for `npm run preview`, files served from this folder
 // ============================================================
 
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,6 +42,10 @@ const GITHUB_LIMIT = 100 * MB;
 const LICENSES = new Set(['CC-BY-4.0', 'CC0-1.0', 'CC-BY-NC-4.0', 'MIT']);
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const EDITOR = (process.env.EDITOR_URL ?? 'https://ai.goatedit.com').replace(/\/$/, '');
+
+const CACHE = join(ROOT, '.cache', 'cards');
+const CARD_WIDTH = 540;
+const CARD_SECONDS = 12;
 
 const errors = [];
 const warnings = [];
@@ -142,6 +148,47 @@ async function readTemplate(id) {
   return { id, meta, project, files, bytes };
 }
 
+function hasFfmpeg() {
+  try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; }
+}
+
+/**
+ * A card's clip, poster and average colour, made from its preview: a grid of
+ * full-size previews would pull hundreds of megabytes, so the gallery plays
+ * these instead and keeps the full preview for the viewer. Kept in .cache/
+ * by the preview's git blob id, so a rebuild only cuts what changed.
+ */
+async function cardFor(id, preview) {
+  const src = join(TEMPLATES, id, preview);
+  const key = sh(`git rev-parse HEAD:templates/${id}/${preview}`) || `${id}-${(await stat(src)).size}`;
+  const video = join(CACHE, `${key}.mp4`);
+  const poster = join(CACHE, `${key}.jpg`);
+  const colour = join(CACHE, `${key}.txt`);
+  const ff = args => execFileSync('ffmpeg', ['-v', 'error', '-y', ...args], { stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 20 });
+  if (!(await isFile(video))) {
+    await mkdir(CACHE, { recursive: true });
+    ff(['-i', src, '-t', String(CARD_SECONDS), '-an', '-vf', `scale=${CARD_WIDTH}:-2:flags=lanczos,fps=30`,
+      '-c:v', 'libx264', '-profile:v', 'main', '-pix_fmt', 'yuv420p', '-crf', '28', '-preset', 'slow',
+      '-movflags', '+faststart', video]);
+  }
+  if (!(await isFile(poster))) {
+    ff(['-ss', '1', '-i', src, '-frames:v', '1', '-vf', 'scale=900:-2:flags=lanczos', '-q:v', '4', poster]);
+  }
+  if (!(await isFile(colour))) {
+    const rgb = ff(['-ss', '1', '-i', src, '-frames:v', '1', '-vf', 'scale=1:1:flags=area', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+    await writeFile(colour, '#' + [...rgb.subarray(0, 3)].map(n => n.toString(16).padStart(2, '0')).join(''));
+  }
+  await cp(video, join(DIST, 'c', `${id}.mp4`));
+  await cp(poster, join(DIST, 'c', `${id}.jpg`));
+  return { video: `c/${id}.mp4`, poster: `c/${id}.jpg`, color: (await readFile(colour, 'utf8')).trim() };
+}
+
+/** When the template was first published: its template.json's first commit. */
+function addedAt(id) {
+  const dates = sh(`git log --diff-filter=A --format=%cI -- templates/${id}/template.json`).split('\n').filter(Boolean);
+  return new Date(dates.at(-1) || Date.now()).toISOString();
+}
+
 async function main() {
   const ids = (await readdir(TEMPLATES, { withFileTypes: true }).catch(() => []))
     .filter(e => e.isDirectory())
@@ -178,6 +225,9 @@ async function main() {
 
   await rm(DIST, { recursive: true, force: true });
   await mkdir(join(DIST, 't'), { recursive: true });
+  await mkdir(join(DIST, 'c'), { recursive: true });
+  const ffmpeg = hasFfmpeg();
+  if (!ffmpeg) console.warn('warning  no ffmpeg: cards will play the full preview videos');
 
   const entries = [];
   for (const t of read) {
@@ -187,6 +237,10 @@ async function main() {
       return /^(blob:|file:)/.test(s) ? '' : s;
     });
     await writeFile(join(DIST, 't', `${id}.json`), JSON.stringify(resolved));
+    let card = null;
+    if (ffmpeg && meta.preview) {
+      try { card = await cardFor(id, meta.preview); } catch (e) { console.warn(`warning  ${id}: could not cut its card clip: ${String(e.stderr ?? e.message).trim().slice(0, 200)}`); }
+    }
     entries.push({
       id,
       name: meta.name,
@@ -203,11 +257,15 @@ async function main() {
       ...(meta.preview ? { previewUrl: fileUrl(id, meta.preview, files.get(meta.preview)) } : {}),
       ...(meta.thumbnail ? { thumbnailUrl: fileUrl(id, meta.thumbnail, files.get(meta.thumbnail)) } : {}),
       bytes: t.bytes,
+      // Paths relative to index.json: the gallery page's own small copies.
+      ...(card ? { card } : {}),
+      addedAt: addedAt(id),
       openUrl: `${EDITOR}/?project-template=${id}`,
       sourceUrl: LOCAL ? '' : `https://github.com/${repo}/tree/main/templates/${id}`,
     });
   }
 
+  entries.sort((a, b) => Date.parse(b.addedAt) - Date.parse(a.addedAt) || a.name.localeCompare(b.name));
   const manifest = {
     schemaVersion: SCHEMA,
     generatedAt: new Date().toISOString(),

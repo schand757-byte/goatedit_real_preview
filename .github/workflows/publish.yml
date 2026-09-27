@@ -25,9 +25,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # each template's first-published date comes from history
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Install ffmpeg (cuts each card's small clip and poster)
+        run: which ffmpeg || (sudo apt-get update -q && sudo apt-get install -y -q ffmpeg)
+      - uses: actions/cache@v4
+        with:
+          path: .cache/cards
+          key: cards-${{ hashFiles('templates/*/preview.*') }}
+          restore-keys: cards-
       - run: node scripts/build.mjs
         env:
           PAGES_URL: ${{ vars.PAGES_URL }}

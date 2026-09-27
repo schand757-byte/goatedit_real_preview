@@ -1,150 +1,480 @@
 // ============================================================
-// The gallery page. Reads index.json (what the editor reads too), shows each
-// template as its preview video, and hands "Open in GoatEdit" to the editor
-// as a ?project-template= link, which makes a new project from it.
+// The gallery page. Reads index.json (what the editor reads too) and shows
+// each template as a card that plays while it is on screen, in a masonry
+// board; a card opens the viewer, and "Open in GoatEdit" hands the template to
+// the editor as a ?project-template= link, which makes a new project from it.
 //
-// Nothing here renders a template's contents — only the preview video its
-// author exported — so the page runs no one else's code.
+// Cards play the small clip the build cut from each preview (`card.video`),
+// never the full preview: that one is only fetched in the viewer.
+//
+// Nothing here renders a template's contents — only the videos its author
+// exported — so the page runs no one else's code.
 // ============================================================
 
-const grid = document.getElementById('grid');
-const empty = document.getElementById('empty');
-const count = document.getElementById('count');
-const search = document.getElementById('q');
-const tagBar = document.getElementById('tags');
-const shapeBar = document.getElementById('shapes');
-const viewer = document.getElementById('viewer');
-const viewerVideo = document.getElementById('viewer-video');
+const $ = id => document.getElementById(id);
+const grid = $('grid');
+const search = $('q');
+const viewer = $('viewer');
+const viewerVideo = $('v-video');
 
-const activeTags = new Set();
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const saveData = navigator.connection?.saveData === true;
+/** Cards play by themselves while on screen, unless the visitor asked for less motion or data. */
+const autoplay = !reduceMotion && !saveData;
+const NEW_FOR = 7 * 24 * 3600 * 1000;
+
+let templates = [];
+let shown = [];
 let activeShape = null;
+const activeTags = new Set();
+let current = null;
+/** Whether the open viewer added the history entry it is showing. */
+let pushed = false;
 
-function shape(t) {
-  const r = t.width / t.height;
-  if (Math.abs(r - 16 / 9) < 0.02) return '16:9';
-  if (Math.abs(r - 9 / 16) < 0.02) return '9:16';
-  if (Math.abs(r - 1) < 0.02) return '1:1';
-  if (Math.abs(r - 4 / 5) < 0.02) return '4:5';
-  return 'Other';
-}
-
-const time = s => {
-  const m = Math.floor(s / 60);
-  const r = Math.round(s % 60);
-  return m ? `${m}:${String(r).padStart(2, '0')}` : `${r}s`;
-};
-
-const size = n => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+// --- Small helpers -----------------------------------------------------
 
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (v === undefined || v === null || v === false) continue;
     if (k === 'text') e.textContent = v;
+    else if (k === 'style' && typeof v === 'object') for (const [p, x] of Object.entries(v)) e.style.setProperty(p, x);
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
     else e.setAttribute(k, v === true ? '' : v);
   }
-  e.append(...children.filter(Boolean));
+  e.append(...children.filter(c => c !== null && c !== undefined && c !== false));
   return e;
 }
 
-function card(t) {
-  const media = el('div', { class: 'card__media', style: `aspect-ratio: ${t.width} / ${t.height}` });
-  if (t.thumbnailUrl) media.append(el('img', { src: t.thumbnailUrl, alt: '', loading: 'lazy' }));
-  let video = null;
-  const play = () => {
-    if (!t.previewUrl) return;
-    if (!video) {
-      video = el('video', { src: t.previewUrl, muted: true, loop: true, playsinline: true, preload: 'auto' });
-      video.muted = true;
-      media.append(video);
-    }
-    video.play().catch(() => {});
-  };
-  const stop = () => { if (video && t.thumbnailUrl) video.pause(); };
-  // With no thumbnail, the video's first frame is the thumbnail.
-  if (!t.thumbnailUrl && t.previewUrl) {
-    video = el('video', { src: `${t.previewUrl}#t=0.5`, muted: true, loop: true, playsinline: true, preload: 'metadata' });
-    video.muted = true;
-    media.append(video);
-  }
-  media.append(el('span', { class: 'card__badge', text: `${shape(t) === 'Other' ? `${t.width}×${t.height}` : shape(t)} · ${time(t.duration)}` }));
-  return el('button', {
-    class: 'card', type: 'button', 'aria-label': `${t.name} by ${t.author}`,
-    onmouseenter: play, onmouseleave: stop, onfocus: play, onblur: stop,
-    onclick: () => open(t),
-  },
-    media,
-    el('div', { class: 'card__body' },
-      el('div', { class: 'card__name', text: t.name }),
-      el('div', { class: 'card__by', text: `by ${t.author}` })),
-  );
+function svg(path) {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', '0 0 24 24');
+  s.setAttribute('aria-hidden', 'true');
+  s.innerHTML = path;
+  return s;
+}
+const ARROW = '<path d="M7 17 17 7M9 7h8v8" />';
+
+const SHAPES = [
+  { id: '16:9', label: 'Landscape', w: 16, h: 9 },
+  { id: '9:16', label: 'Portrait', w: 9, h: 16 },
+  { id: '1:1', label: 'Square', w: 12, h: 12 },
+  { id: '4:5', label: 'Feed', w: 10, h: 12.5 },
+];
+
+function shape(t) {
+  const r = t.width / t.height;
+  for (const s of SHAPES) if (Math.abs(r - s.w / s.h) < 0.02) return s.id;
+  return 'Other';
 }
 
-function open(t) {
-  document.getElementById('viewer-name').textContent = t.name;
-  const by = document.getElementById('viewer-by');
-  by.textContent = 'by ';
-  by.append(t.authorUrl ? el('a', { href: t.authorUrl, target: '_blank', rel: 'noopener', text: t.author }) : t.author);
-  document.getElementById('viewer-desc').textContent = t.description;
-  document.getElementById('viewer-meta').textContent =
-    `${t.width}×${t.height} · ${t.fps} fps · ${time(t.duration)} · ${size(t.bytes)} of files · ${t.license}${t.tags.length ? ` · ${t.tags.join(', ')}` : ''}`;
-  document.getElementById('viewer-open').href = t.openUrl;
-  const src = document.getElementById('viewer-src');
-  src.hidden = !t.sourceUrl;
-  if (t.sourceUrl) src.href = t.sourceUrl;
+const time = s => {
+  const m = Math.floor(s / 60);
+  const r = Math.round(s % 60);
+  return m ? `${m}:${String(r).padStart(2, '0')}` : `0:${String(r).padStart(2, '0')}`;
+};
+
+const size = n => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(n >= 100 * 1024 * 1024 ? 0 : 1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+function resolution(t) {
+  const k = Math.max(t.width, t.height);
+  const name = k >= 3840 ? ' · 4K' : k >= 2560 ? ' · 2.5K' : k >= 1920 ? ' · HD' : '';
+  return `${t.width}×${t.height}${name}`;
+}
+
+function ago(iso) {
+  const d = (Date.now() - Date.parse(iso)) / 1000;
+  if (!(d >= 0)) return '';
+  const units = [[31536000, 'year'], [2592000, 'month'], [604800, 'week'], [86400, 'day'], [3600, 'hour'], [60, 'minute']];
+  for (const [s, name] of units) {
+    const n = Math.floor(d / s);
+    if (n >= 1) return `${n} ${name}${n > 1 ? 's' : ''} ago`;
+  }
+  return 'just now';
+}
+
+const isNew = t => t.addedAt && Date.now() - Date.parse(t.addedAt) < NEW_FOR;
+const cardVideo = t => t.card?.video ?? t.previewUrl;
+const poster = t => t.card?.poster ?? t.thumbnailUrl;
+
+/** A colour pair from a name, so each author keeps the same avatar. */
+function avatar(name, big = false) {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.codePointAt(0)) >>> 0;
+  const h1 = h % 360;
+  return el('span', {
+    class: `avatar${big ? ' avatar--lg' : ''}`,
+    style: { '--h1': `${h1}deg`, '--h2': `${(h1 + 60) % 360}deg` },
+    text: [...name.trim()][0] ?? '?',
+  });
+}
+
+let toastTimer = 0;
+function toast(text) {
+  const t = $('toast');
+  t.textContent = text;
+  t.hidden = false;
+  t.style.animation = 'none';
+  void t.offsetWidth;
+  t.style.animation = '';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 1800);
+}
+
+// --- Cards ---------------------------------------------------------------
+
+const cards = new Map();
+
+/** Plays a card's clip while it is at least partly on screen; builds the <video> the first time. */
+const playing = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    const c = e.target.__card;
+    if (e.isIntersecting && e.intersectionRatio >= 0.35) c.play(); else c.pause();
+  }
+}, { threshold: [0, 0.35, 0.7] });
+
+/** Fades cards in the first time they come into view, a beat apart. */
+const reveal = new IntersectionObserver(entries => {
+  let n = 0;
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    e.target.style.setProperty('--delay', `${Math.min(n++, 6) * 70}ms`);
+    e.target.classList.add('is-in');
+    reveal.unobserve(e.target);
+  }
+}, { rootMargin: '0px 0px -40px 0px' });
+
+function makeCard(t) {
+  const still = poster(t);
+  const media = el('button', {
+    class: 'card__media', type: 'button', 'aria-label': `Watch ${t.name} by ${t.author}`,
+    style: { 'aspect-ratio': `${t.width} / ${t.height}`, '--c': t.card?.color ?? '#18181b' },
+    onclick: () => openViewer(t),
+  });
+  if (still) media.append(el('img', { src: still, alt: '', loading: 'lazy', decoding: 'async' }));
+
+  let video = null;
+  let hovering = false;
+  const ensureVideo = () => {
+    if (video || !cardVideo(t)) return video;
+    video = el('video', { src: cardVideo(t), muted: true, loop: true, playsinline: true, preload: 'auto', 'aria-hidden': 'true' });
+    video.muted = true;
+    video.addEventListener('playing', () => video.classList.add('is-playing'));
+    media.append(video);
+    return video;
+  };
+  if (!still) {
+    // No poster: the clip's own first frame stands in for one.
+    ensureVideo();
+    video.preload = 'metadata';
+    video.classList.add('is-playing');
+  }
+  const api = {
+    play() { if (autoplay || hovering) ensureVideo()?.play().catch(() => {}); },
+    pause() { if (video && !hovering) video.pause(); },
+  };
+
+  media.append(
+    el('span', { class: 'badge badge--time', text: time(t.duration) }),
+    isNew(t) ? el('span', { class: 'badge badge--new', text: 'New' }) : null,
+    el('span', { class: 'badge badge--live', text: shape(t) === 'Other' ? `${t.width}×${t.height}` : shape(t) }),
+  );
+
+  const open = el('a', { class: 'card__open', href: t.openUrl, target: '_blank', rel: 'noopener', 'aria-label': `Open ${t.name} in GoatEdit` }, 'Use', svg(ARROW));
+
+  const card = el('article', {
+    class: 'card',
+    onpointerenter: () => { hovering = true; ensureVideo()?.play().catch(() => {}); },
+    onpointerleave: () => { hovering = false; if (!autoplay) video?.pause(); },
+    onpointermove: e => {
+      const r = media.getBoundingClientRect();
+      media.style.setProperty('--mx', `${e.clientX - r.left}px`);
+      media.style.setProperty('--my', `${e.clientY - r.top}px`);
+    },
+  },
+    el('div', { style: { position: 'relative' } }, media, open),
+    el('div', { class: 'card__meta' },
+      avatar(t.author),
+      el('div', { class: 'card__text' },
+        el('div', { class: 'card__name', text: t.name }),
+        el('div', { class: 'card__by', text: t.author }))),
+  );
+  card.__card = api;
+  playing.observe(card);
+  reveal.observe(card);
+  return card;
+}
+
+// --- Masonry ----------------------------------------------------------------
+
+function columnCount() {
+  const w = grid.clientWidth || innerWidth;
+  return w >= 1600 ? 5 : w >= 1180 ? 4 : w >= 820 ? 3 : 2;
+}
+
+let laidOut = { n: 0, ids: '' };
+
+/** Deals the cards into columns, each to the shortest so far, keeping reading order left to right. */
+function layout(force = false) {
+  const n = columnCount();
+  const ids = shown.map(t => t.id).join(',');
+  if (!force && n === laidOut.n && ids === laidOut.ids) return;
+  laidOut = { n, ids };
+  const cols = Array.from({ length: n }, () => el('div', { class: 'col' }));
+  const heights = new Array(n).fill(0);
+  for (const t of shown) {
+    let card = cards.get(t.id);
+    if (!card) { card = makeCard(t); cards.set(t.id, card); }
+    const i = heights.indexOf(Math.min(...heights));
+    cols[i].append(card);
+    heights[i] += t.height / t.width + 0.22; // the picture, plus the name under it
+  }
+  grid.replaceChildren(...cols);
+}
+
+function skeleton() {
+  const n = columnCount();
+  const shapes = [0.56, 1.3, 0.75, 1, 0.56, 1.6, 0.8, 0.56];
+  grid.replaceChildren(...Array.from({ length: n }, (_, c) =>
+    el('div', { class: 'col' }, ...[0, 1, 2].map(i =>
+      el('div', { class: 'skeleton', style: { 'aspect-ratio': `1 / ${shapes[(c * 3 + i) % shapes.length]}` } })))));
+}
+
+// --- Filters -----------------------------------------------------------------
+
+function renderFilters() {
+  const present = new Set(templates.map(shape));
+  const options = SHAPES.filter(s => present.has(s.id));
+  const seg = $('shapes');
+  seg.hidden = options.length < 2;
+  seg.replaceChildren(
+    el('button', { type: 'button', 'aria-pressed': String(!activeShape), text: 'All', onclick: () => { activeShape = null; apply(); } }),
+    ...options.map(s => el('button', {
+      type: 'button', 'aria-pressed': String(activeShape === s.id), title: s.id,
+      onclick: () => { activeShape = activeShape === s.id ? null : s.id; apply(); },
+    }, el('i', { style: { width: `${s.w * 0.9}px`, height: `${s.h * 0.9}px` } }), s.label)),
+  );
+  const tags = [...new Set(templates.flatMap(t => t.tags))].sort();
+  $('tags').replaceChildren(...tags.map(x => el('button', {
+    class: 'chip', type: 'button', 'aria-pressed': String(activeTags.has(x)), text: `#${x}`,
+    onclick: () => { activeTags.has(x) ? activeTags.delete(x) : activeTags.add(x); apply(); },
+  })));
+}
+
+function apply() {
+  const q = search.value.trim().toLowerCase();
+  const words = q.split(/\s+/).filter(Boolean);
+  shown = templates.filter(t => {
+    if (activeShape && shape(t) !== activeShape) return false;
+    if (![...activeTags].every(x => t.tags.includes(x))) return false;
+    const hay = `${t.name} ${t.description} ${t.author} ${t.tags.join(' ')}`.toLowerCase();
+    return words.every(w => hay.includes(w));
+  });
+  renderFilters();
+  layout();
+  const filtered = q || activeShape || activeTags.size;
+  $('count').textContent = filtered ? `${shown.length} of ${templates.length}` : `${templates.length} template${templates.length === 1 ? '' : 's'}`;
+  $('empty').hidden = shown.length > 0;
+  $('empty-text').textContent = templates.length ? 'Try fewer words or another filter.' : 'No templates have been published yet.';
+  $('clear').hidden = !filtered;
+}
+
+function clearFilters() {
+  search.value = '';
+  activeShape = null;
+  activeTags.clear();
+  apply();
+}
+$('clear').addEventListener('click', clearFilters);
+
+let scrolledToBoard = false;
+search.addEventListener('input', () => {
+  apply();
+  // Typing in the hero: bring the results into view once.
+  const board = $('browse').getBoundingClientRect();
+  if (!scrolledToBoard && board.top > innerHeight * 0.6) {
+    scrolledToBoard = true;
+    $('browse').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' });
+  }
+});
+
+// --- Hero wall ------------------------------------------------------------------
+
+function buildWall() {
+  const stills = templates.filter(poster);
+  if (!stills.length) return;
+  const wall = $('wall');
+  const rows = [0, 1, 2].map(r => {
+    // Enough frames to overfill the widest screen, then the same again so the loop is seamless.
+    const order = stills.map((_, i) => stills[(i + r) % stills.length]);
+    const run = [];
+    while (run.length < 9) run.push(...order);
+    return el('div', { class: 'wall__row', style: { '--dur': `${70 + r * 25}s` } },
+      ...[...run, ...run].map(t => el('img', { src: poster(t), alt: '', decoding: 'async', style: { '--ar': `${t.width} / ${t.height}` } })));
+  });
+  wall.replaceChildren(...rows);
+  const first = wall.querySelector('img');
+  const ready = () => wall.classList.add('is-ready');
+  first.complete ? ready() : first.addEventListener('load', ready, { once: true });
+}
+
+// --- Viewer ----------------------------------------------------------------------
+
+const glow = $('v-glow');
+const glowCtx = glow.getContext('2d');
+let glowFrame = 0;
+let glowLast = 0;
+
+/** Paints the playing frame, a few pixels wide, behind the stage: the room takes the video's light. */
+function paintGlow(now) {
+  glowFrame = requestAnimationFrame(paintGlow);
+  if (now - glowLast < 120 || viewerVideo.readyState < 2) return;
+  glowLast = now;
+  try { glowCtx.drawImage(viewerVideo, 0, 0, glow.width, glow.height); } catch { /* not decodable yet */ }
+}
+
+function spec(label, value) {
+  return el('div', {}, el('dt', { text: label }), el('dd', { text: value }));
+}
+
+const LICENCE_NAMES = { 'CC-BY-4.0': 'CC BY 4.0', 'CC0-1.0': 'CC0 (free)', 'CC-BY-NC-4.0': 'CC BY-NC 4.0', MIT: 'MIT' };
+
+function related(t) {
+  const score = x => x.tags.filter(g => t.tags.includes(g)).length * 2 + (shape(x) === shape(t) ? 1 : 0) + (x.author === t.author ? 1 : 0);
+  return templates.filter(x => x.id !== t.id).sort((a, b) => score(b) - score(a)).slice(0, 4);
+}
+
+function openViewer(t, { push = true } = {}) {
+  current = t;
+  const by = t.authorUrl ? el('a', { href: t.authorUrl, target: '_blank', rel: 'noopener' }, el('b', { text: t.author })) : el('b', { text: t.author });
+  $('v-who').replaceChildren(avatar(t.author, true), el('div', {}, by, el('span', { text: t.addedAt ? `Published ${ago(t.addedAt)}` : 'Template' })));
+  $('v-name').textContent = t.name;
+  $('v-desc').textContent = t.description;
+  $('v-tags').replaceChildren(...t.tags.map(x => el('button', {
+    class: 'chip', type: 'button', text: `#${x}`,
+    onclick: () => { closeViewer(); activeTags.clear(); activeTags.add(x); apply(); $('browse').scrollIntoView(); },
+  })));
+  $('v-specs').replaceChildren(
+    spec('Frame', resolution(t)),
+    spec('Rate', `${Math.round(t.fps * 100) / 100} fps`),
+    spec('Length', time(t.duration)),
+    spec('Files', t.bytes ? size(t.bytes) : '—'),
+    spec('Shape', shape(t) === 'Other' ? `${t.width}:${t.height}` : shape(t)),
+    spec('Licence', LICENCE_NAMES[t.license] ?? t.license),
+  );
+  const open = $('v-open');
+  open.href = t.openUrl;
+  open.target = '_blank';
+
+  const more = related(t);
+  $('v-more-wrap').hidden = !more.length;
+  $('v-more').replaceChildren(...more.map(x => el('button', {
+    type: 'button', style: { '--c': x.card?.color ?? '#18181b' }, onclick: () => openViewer(x, { push: false }),
+    'aria-label': `Watch ${x.name}`,
+  }, poster(x) ? el('img', { src: poster(x), alt: '', loading: 'lazy' }) : null, el('span', { text: x.name }))));
+  $('v-prev').hidden = $('v-next').hidden = shown.length < 2 || !shown.includes(t);
+
+  glowCtx.fillStyle = t.card?.color ?? '#000';
+  glowCtx.fillRect(0, 0, glow.width, glow.height);
+  viewerVideo.poster = poster(t) ?? '';
   viewerVideo.hidden = !t.previewUrl;
   if (t.previewUrl) {
     viewerVideo.src = t.previewUrl;
-    viewerVideo.poster = t.thumbnailUrl ?? '';
     viewerVideo.play().catch(() => {});
   }
-  history.replaceState(null, '', `#${t.id}`);
-  viewer.showModal();
+  document.querySelector('.viewer__side').scrollTop = 0;
+  viewer.scrollTop = 0;
+
+  if (push) {
+    if (!viewer.open) { history.pushState({ viewer: true }, '', `#${t.id}`); pushed = true; }
+  } else {
+    history.replaceState(history.state, '', `#${t.id}`);
+  }
+  if (!viewer.open) {
+    viewer.showModal();
+    $('v-close').focus({ preventScroll: true });
+    viewer.scrollTop = 0;
+    document.body.classList.add('is-locked');
+    cancelAnimationFrame(glowFrame);
+    glowFrame = requestAnimationFrame(paintGlow);
+  }
+}
+
+function step(d) {
+  if (!current || shown.length < 2) return;
+  const i = shown.indexOf(current);
+  if (i < 0) return;
+  openViewer(shown[(i + d + shown.length) % shown.length], { push: false });
+}
+
+function closeViewer() {
+  if (!viewer.open) return;
+  viewer.close();
 }
 
 viewer.addEventListener('close', () => {
+  cancelAnimationFrame(glowFrame);
   viewerVideo.pause();
   viewerVideo.removeAttribute('src');
   viewerVideo.load();
-  history.replaceState(null, '', location.pathname + location.search);
+  document.body.classList.remove('is-locked');
+  current = null;
+  if (pushed) { pushed = false; history.back(); } else if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 });
-document.getElementById('viewer-close').addEventListener('click', () => viewer.close());
-viewer.addEventListener('click', e => { if (e.target === viewer) viewer.close(); });
 
-function chips(bar, values, isOn, toggle) {
-  bar.replaceChildren(...values.map(v =>
-    el('button', { class: 'chip', type: 'button', 'aria-pressed': String(isOn(v)), text: v, onclick: () => { toggle(v); render(); } })));
-}
+addEventListener('popstate', () => {
+  const t = templates.find(x => `#${x.id}` === location.hash);
+  if (t) { openViewer(t, { push: false }); return; }
+  if (viewer.open) { pushed = false; viewer.close(); }
+});
 
-let templates = [];
+$('v-close').addEventListener('click', () => closeViewer());
+$('v-prev').addEventListener('click', () => step(-1));
+$('v-next').addEventListener('click', () => step(1));
+viewer.addEventListener('click', e => { if (e.target === viewer || e.target.classList.contains('viewer__stage')) closeViewer(); });
+$('v-copy').addEventListener('click', async () => {
+  if (!current) return;
+  const url = `${location.origin}${location.pathname}#${current.id}`;
+  try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch { prompt('Copy this link', url); }
+});
 
-function render() {
-  const q = search.value.trim().toLowerCase();
-  const shown = templates.filter(t =>
-    (!activeShape || shape(t) === activeShape) &&
-    [...activeTags].every(x => t.tags.includes(x)) &&
-    (!q || `${t.name} ${t.description} ${t.author} ${t.tags.join(' ')}`.toLowerCase().includes(q)));
-  grid.replaceChildren(...shown.map(card));
-  empty.hidden = shown.length > 0;
-  count.textContent = `${shown.length} of ${templates.length} template${templates.length === 1 ? '' : 's'}`;
-  const shapes = [...new Set(templates.map(shape))];
-  chips(shapeBar, shapes.length > 1 ? shapes : [], s => s === activeShape, s => { activeShape = activeShape === s ? null : s; });
-  const tags = [...new Set(templates.flatMap(t => t.tags))].sort();
-  chips(tagBar, tags, x => activeTags.has(x), x => { activeTags.has(x) ? activeTags.delete(x) : activeTags.add(x); });
-}
+// --- Keys and scroll ---------------------------------------------------------------
 
-search.addEventListener('input', render);
+addEventListener('keydown', e => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
+  if (viewer.open) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+    return;
+  }
+  if (e.key === '/' && !typing) { e.preventDefault(); search.focus(); }
+  if (e.key === 'Escape' && document.activeElement === search) { search.value ? clearFilters() : search.blur(); }
+});
 
+const bar = $('bar');
+const onScroll = () => bar.classList.toggle('is-scrolled', scrollY > 12);
+addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+
+let resizeTimer = 0;
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => layout(), 120); });
+
+// --- Start -------------------------------------------------------------------------
+
+skeleton();
 try {
   const res = await fetch('index.json', { cache: 'no-cache' });
+  if (!res.ok) throw new Error(String(res.status));
   const manifest = await res.json();
-  templates = manifest.templates ?? [];
-  render();
+  templates = (manifest.templates ?? []).filter(t => t && t.id && t.width > 0 && t.height > 0);
+  $('eyebrow').textContent = templates.length ? `${templates.length} template${templates.length === 1 ? '' : 's'} · free to use` : 'Templates';
+  buildWall();
+  apply();
   const linked = templates.find(t => `#${t.id}` === location.hash);
-  if (linked) open(linked);
-  if (!templates.length) { empty.textContent = 'No templates published yet.'; empty.hidden = false; }
+  if (linked) openViewer(linked, { push: false });
 } catch {
-  empty.textContent = 'Could not load the gallery.';
-  empty.hidden = false;
+  grid.replaceChildren();
+  $('empty').hidden = false;
+  $('empty-text').textContent = 'Could not load the gallery. Check your connection and reload.';
+  $('clear').hidden = true;
 }

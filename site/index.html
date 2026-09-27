@@ -2,55 +2,113 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>GoatEdit Templates</title>
     <meta name="description" content="Whole edits made in GoatEdit — footage, 3D, effects and all. Watch one, then open it in the editor as your own project." />
+    <meta name="theme-color" content="#08080a" />
     <link rel="icon" href="mark.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700&display=swap" />
     <link rel="stylesheet" href="gallery.css" />
   </head>
   <body>
-    <header class="top">
-      <div class="wrap top__row">
-        <a class="brand" href="./"><img src="mark.svg" alt="" width="28" height="27" /> GoatEdit <span>Templates</span></a>
-        <a class="btn" href="https://ai.goatedit.com">Open the editor</a>
-      </div>
-      <div class="wrap hero">
-        <h1>Start from an edit that already works.</h1>
-        <p>Every template is a real GoatEdit project: timeline, effects, 3D models and footage. Watch it here, open it in the editor, and make it yours. Nothing to download: the files stream straight from the gallery.</p>
-      </div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="bar" id="bar">
+      <a class="brand" href="./" aria-label="GoatEdit Templates">
+        <img src="mark.svg" alt="" width="26" height="25" />
+        <span class="brand__word">GoatEdit</span>
+        <span class="brand__sub">Templates</span>
+      </a>
+      <label class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <input id="q" type="search" placeholder="Search edits, authors, tags" autocomplete="off" spellcheck="false" aria-label="Search templates" />
+        <kbd aria-hidden="true">/</kbd>
+      </label>
+      <a class="btn btn--ghost bar__cta" href="https://ai.goatedit.com">Open editor</a>
     </header>
 
-    <div class="wrap controls">
-      <input id="q" type="search" placeholder="Search templates" autocomplete="off" aria-label="Search templates" />
-      <div id="shapes" class="chips" role="group" aria-label="Filter by shape"></div>
-      <div id="tags" class="chips" role="group" aria-label="Filter by tag"></div>
-    </div>
+    <section class="hero">
+      <div class="wall" id="wall" aria-hidden="true"></div>
+      <div class="hero__copy">
+        <p class="eyebrow"><span class="dot"></span><span id="eyebrow">Templates</span></p>
+        <h1>Edits that <em>already move.</em><br />Make them yours.</h1>
+        <p class="lede">Real GoatEdit projects — timeline, 3D, effects and footage. Watch one, open it in the editor, change anything. Nothing to download.</p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href="#browse">Browse templates</a>
+          <a class="btn btn--ghost" href="#publish">Publish your own</a>
+        </div>
+      </div>
+    </section>
 
-    <main class="wrap">
-      <p id="count" class="count"></p>
-      <div id="grid" class="grid"></div>
-      <p id="empty" class="empty" hidden>No templates match.</p>
+    <nav class="filters" id="browse" aria-label="Filters">
+      <div class="seg" id="shapes" role="group" aria-label="Frame shape"></div>
+      <div class="chips" id="tags" role="group" aria-label="Tags"></div>
+      <span class="count" id="count" aria-live="polite"></span>
+    </nav>
+
+    <main class="board">
+      <div class="masonry" id="grid"></div>
+      <div class="empty" id="empty" hidden>
+        <p class="empty__big">Nothing here yet.</p>
+        <p id="empty-text">No templates match.</p>
+        <button class="btn btn--ghost" id="clear" type="button">Clear filters</button>
+      </div>
     </main>
 
-    <dialog id="viewer" class="viewer">
-      <div class="viewer__media"><video id="viewer-video" controls loop playsinline></video></div>
-      <div class="viewer__body">
-        <h2 id="viewer-name"></h2>
-        <p id="viewer-by" class="muted"></p>
-        <p id="viewer-desc"></p>
-        <p id="viewer-meta" class="muted small"></p>
-        <div class="viewer__actions">
-          <a id="viewer-open" class="btn btn--primary" target="_blank" rel="noopener">Open in GoatEdit</a>
-          <a id="viewer-src" class="btn" target="_blank" rel="noopener">Files on GitHub</a>
-          <button id="viewer-close" class="btn" type="button">Close</button>
+    <section class="publish" id="publish">
+      <div class="publish__card">
+        <p class="eyebrow"><span class="dot"></span>Share yours</p>
+        <h2>Made something <em>good?</em></h2>
+        <p>In GoatEdit, open <b>File ▸ Publish as Template</b>. Your footage, 3D models and effects travel with it, and it shows up here for everyone to start from.</p>
+        <a class="btn btn--primary" href="https://ai.goatedit.com">Open the editor</a>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span>GoatEdit Templates</span>
+      <span>Each template carries its own licence. Check it before you publish work made from one.</span>
+    </footer>
+
+    <dialog class="viewer" id="viewer" aria-labelledby="v-name">
+      <canvas class="viewer__glow" id="v-glow" width="32" height="18" aria-hidden="true"></canvas>
+      <button class="viewer__x" id="v-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+      </button>
+      <div class="viewer__grid">
+        <div class="viewer__stage">
+          <video id="v-video" controls loop playsinline muted></video>
+          <button class="viewer__nav viewer__nav--prev" id="v-prev" type="button" aria-label="Previous template">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
+          </button>
+          <button class="viewer__nav viewer__nav--next" id="v-next" type="button" aria-label="Next template">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
+          </button>
         </div>
+        <aside class="viewer__side">
+          <div class="who" id="v-who"></div>
+          <h2 id="v-name"></h2>
+          <p class="viewer__desc" id="v-desc"></p>
+          <div class="viewer__tags" id="v-tags"></div>
+          <dl class="specs" id="v-specs"></dl>
+          <div class="viewer__actions">
+            <a class="btn btn--primary btn--big" id="v-open" rel="noopener">
+              Open in GoatEdit
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" /></svg>
+            </a>
+            <button class="btn btn--ghost" id="v-copy" type="button">Copy link</button>
+          </div>
+          <p class="viewer__hint">Opens as a new project. The original stays as it is.</p>
+          <div class="more" id="v-more-wrap">
+            <p class="more__title">More like this</p>
+            <div class="more__grid" id="v-more"></div>
+          </div>
+        </aside>
       </div>
     </dialog>
 
-    <footer class="wrap foot muted small">
-      Made something good? In GoatEdit use <b>File ▸ Publish as Template</b> to share it here.
-      Each template carries its own licence; check it before you publish work made from one.
-    </footer>
+    <div class="toast" id="toast" role="status" hidden></div>
 
     <script src="gallery.js" type="module"></script>
   </body>
