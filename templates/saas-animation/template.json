@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "saas-animation",
+  "name": "Saas animation",
+  "description": "",
+  "author": "God",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "category": "promo",
+  "styles": [
+    "3d",
+    "neon",
+    "glitch"
+  ],
+  "slots": {
+    "footage": 13,
+    "images": 78,
+    "texts": 14
+  },
+  "uses": [
+    "glow",
+    "pixel dissolve",
+    "3d layer",
+    "transitions",
+    "colorama",
+    "captions",
+    "kinetic type",
+    "glitch",
+    "vhs",
+    "blur",
+    "ntsc",
+    "crt screen",
+    "film stock",
+    "halftone",
+    "paper texture",
+    "wave warp"
+  ],
+  "width": 1920,
+  "height": 1080,
+  "fps": 24,
+  "duration": 14.19,
+  "preview": "preview.mp4"
+}
