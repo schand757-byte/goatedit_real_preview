@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "computers",
+  "name": "Computers",
+  "description": "",
+  "author": "God",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "category": "social",
+  "styles": [
+    "neon",
+    "glitch",
+    "retro"
+  ],
+  "slots": {
+    "footage": 6,
+    "images": 21,
+    "texts": 29
+  },
+  "uses": [
+    "film grain",
+    "vignette",
+    "motion blur",
+    "wave warp",
+    "glow",
+    "directional blur",
+    "kinetic type",
+    "transitions",
+    "blur",
+    "masks",
+    "crt screen",
+    "pixel dissolve",
+    "motion graphics"
+  ],
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "duration": 39.47,
+  "preview": "preview.mp4"
+}
