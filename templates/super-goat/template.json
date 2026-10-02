@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "super-goat",
+  "name": "Super Goat",
+  "description": "",
+  "author": "God",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "category": "promo",
+  "styles": [
+    "3d",
+    "cinematic"
+  ],
+  "slots": {
+    "footage": 0,
+    "images": 6,
+    "texts": 74
+  },
+  "uses": [
+    "motion blur",
+    "kinetic type",
+    "film grain",
+    "camera shake",
+    "lens blur",
+    "zoom blur",
+    "twirl",
+    "3d model",
+    "motion graphics"
+  ],
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "duration": 13.37,
+  "preview": "preview.mp4"
+}
