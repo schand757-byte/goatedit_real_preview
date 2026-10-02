@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "fast-cut-edit",
+  "name": "fast cut edit",
+  "description": "",
+  "author": "God",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "category": "promo",
+  "styles": [
+    "cinematic"
+  ],
+  "slots": {
+    "footage": 0,
+    "images": 0,
+    "texts": 74
+  },
+  "uses": [
+    "film stock",
+    "vignette",
+    "motion blur",
+    "kinetic type",
+    "motion graphics"
+  ],
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "duration": 19.9,
+  "preview": "preview.mp4"
+}
