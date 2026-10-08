@@ -207,7 +207,7 @@ async function readTemplate(id) {
   for (const k of ['preview', 'thumbnail']) {
     if (meta[k] && !files.has(meta[k])) bad(`template.json names ${k} "${meta[k]}", which is not in the folder`);
   }
-  if (!meta.preview) warnings.push(`${id}: no preview video; its card will be blank`);
+  if (!meta.preview && !(meta.kind === 'design' && meta.thumbnail)) warnings.push(`${id}: no preview video; its card will be blank`);
   if (!CATEGORY_IDS.has(meta.category)) warnings.push(`${id}: no category, so it only shows under All`);
   for (const st of meta.styles ?? []) if (!STYLE_IDS.has(st)) warnings.push(`${id}: style "${st}" is not one of ${[...STYLE_IDS].join(', ')}; dropped`);
 
@@ -322,6 +322,8 @@ async function main() {
       styles: Array.isArray(meta.styles) ? meta.styles.filter(st => STYLE_IDS.has(st)).slice(0, 3) : [],
       slots: meta.slots && typeof meta.slots === 'object' ? meta.slots : viewOnly ? {} : countSlots(project),
       uses: Array.isArray(meta.uses) ? meta.uses : [],
+      // A design is a piece people add into their own edit, not one they start from.
+      ...(meta.kind === 'design' ? { kind: 'design' } : {}),
       width: meta.width,
       height: meta.height,
       fps: meta.fps ?? 30,

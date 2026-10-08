@@ -189,6 +189,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .badge--new { top: 10px; left: 10px; background: var(--accent); color: var(--accent-ink); backdrop-filter: none; }
 .badge--view { top: 10px; left: 10px; }
 .badge--new + .badge--view { left: 62px; }
+.badge--design { top: 10px; right: 10px; }
 .badge--live { bottom: 12px; left: 12px; opacity: 0; transform: translateY(6px); transition: all 0.4s var(--ease); }
 .badge--live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #ff4d4d; }
 .card__open {

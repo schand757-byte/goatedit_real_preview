@@ -27,6 +27,8 @@ let templates = [];
 let shown = [];
 let activeShape = null;
 let activeCat = null;
+/** The Designs chip, which sits with the categories but filters on kind. */
+const DESIGNS = '__designs';
 const activeStyles = new Set();
 let activeSwap = null;
 // Labels come from index.json; these are only what shows before it loads.
@@ -194,7 +196,7 @@ function makeCard(t) {
     media.append(video);
     return video;
   };
-  if (!still) {
+  if (!still && cardVideo(t)) {
     // No poster: the clip's own first frame stands in for one.
     ensureVideo();
     video.preload = 'metadata';
@@ -209,6 +211,7 @@ function makeCard(t) {
     el('span', { class: 'badge badge--time', text: time(t.duration) }),
     isNew(t) ? el('span', { class: 'badge badge--new', text: 'New' }) : null,
     viewOnly(t) ? el('span', { class: 'badge badge--view', text: 'View only' }) : null,
+    t.kind === 'design' ? el('span', { class: 'badge badge--design', text: 'Design' }) : null,
     el('span', { class: 'badge badge--live', text: shape(t) === 'Other' ? `${t.width}×${t.height}` : shape(t) }),
   );
 
@@ -291,8 +294,15 @@ function renderFilters() {
   // Only what something is filed under: a chip that matches nothing is a dead end.
   const count = id => templates.filter(t => t.category === id).length;
   const cats = CATEGORIES.filter(c => count(c.id));
+  const designs = templates.filter(t => t.kind === 'design').length;
   $('cats').replaceChildren(
     el('button', { type: 'button', 'aria-pressed': String(!activeCat), onclick: () => { activeCat = null; apply(); } }, 'All'),
+    // Designs are pieces to add into an edit — a lower third, a card — and
+    // are found by what they are rather than what they are for.
+    designs ? el('button', {
+      type: 'button', 'aria-pressed': String(activeCat === DESIGNS),
+      onclick: () => { activeCat = activeCat === DESIGNS ? null : DESIGNS; apply(); },
+    }, 'Designs', el('sup', { text: String(designs) })) : '',
     ...cats.map(c => el('button', {
       type: 'button', 'aria-pressed': String(activeCat === c.id),
       onclick: () => { activeCat = activeCat === c.id ? null : c.id; apply(); },
@@ -324,7 +334,7 @@ function apply() {
   const words = q.split(/\s+/).filter(Boolean);
   shown = templates.filter(t => {
     if (activeShape && shape(t) !== activeShape) return false;
-    if (activeCat && t.category !== activeCat) return false;
+    if (activeCat === DESIGNS ? t.kind !== 'design' : activeCat && t.category !== activeCat) return false;
     if (![...activeStyles].every(x => t.styles?.includes(x))) return false;
     if (activeSwap && swap(t) !== activeSwap) return false;
     const hay = haystack(t);
