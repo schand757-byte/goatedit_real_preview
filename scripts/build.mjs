@@ -156,18 +156,29 @@ async function readTemplate(id) {
   const bad = msg => { errors.push(`${id}: ${msg}`); };
   if (!ID.test(id)) { bad('folder name must be lower-case letters, digits and dashes'); return null; }
 
-  let meta, project;
+  let meta, project = {};
   try { meta = JSON.parse(await readFile(join(dir, 'template.json'), 'utf8')); } catch (e) { bad(`template.json: ${e.message}`); return null; }
-  try { project = JSON.parse(await readFile(join(dir, 'project.json'), 'utf8')); } catch (e) { bad(`project.json: ${e.message}`); return null; }
+  // View-only: the gallery shows the preview, nothing opens. Everything in
+  // this repository is public, so the project and its files must not be here.
+  const viewOnly = meta.access === 'view';
+  if (meta.access !== undefined && meta.access !== 'view' && meta.access !== 'open') bad('access must be "open" or "view"');
+  if (viewOnly) {
+    if (await isFile(join(dir, 'project.json'))) bad('is view-only, so project.json must not be published; anyone could download it');
+  } else {
+    try { project = JSON.parse(await readFile(join(dir, 'project.json'), 'utf8')); } catch (e) { bad(`project.json: ${e.message}`); return null; }
+  }
 
   if (meta.id !== id) bad(`template.json id "${meta.id}" is not the folder name`);
   for (const k of ['name', 'author', 'license']) if (typeof meta[k] !== 'string' || !meta[k].trim()) bad(`template.json needs "${k}"`);
   for (const k of ['width', 'height']) if (!(meta[k] > 0)) bad(`template.json needs "${k}"`);
   if (meta.license && !LICENSES.has(meta.license)) bad(`licence "${meta.license}" is not one of ${[...LICENSES].join(', ')}`);
   if (meta.authorUrl && !/^https:\/\//.test(meta.authorUrl)) bad('authorUrl must be https');
-  if (!Array.isArray(project.mediaFiles) || !Array.isArray(project.sequences) || !project.timeline || !project.settings) {
+  if (meta.buyUrl && !/^https:\/\//.test(meta.buyUrl)) bad('buyUrl must be https');
+  if (meta.buyUrl && !viewOnly) warnings.push(`${id}: buyUrl only shows on view-only templates`);
+  if (!viewOnly && (!Array.isArray(project.mediaFiles) || !Array.isArray(project.sequences) || !project.timeline || !project.settings)) {
     bad('project.json is not a GoatEdit project');
   }
+  if (viewOnly && !meta.buyUrl && !meta.authorUrl) warnings.push(`${id}: view-only with no buyUrl or authorUrl; nobody can reach the author`);
 
   // Files: what the project names must exist; what is there and unnamed is dead weight.
   const files = new Map();
@@ -176,6 +187,7 @@ async function readTemplate(id) {
     const size = (await stat(p)).size;
     files.set(rel, size);
     if (size > GITHUB_LIMIT) bad(`${rel} is ${(size / MB).toFixed(0)} MB; GitHub refuses files over 100 MB`);
+    if (viewOnly && rel.startsWith('assets/')) bad(`is view-only, so ${rel} must not be published; anyone could download it`);
   }
   const used = new Set();
   let local = 0;
@@ -200,7 +212,7 @@ async function readTemplate(id) {
   for (const st of meta.styles ?? []) if (!STYLE_IDS.has(st)) warnings.push(`${id}: style "${st}" is not one of ${[...STYLE_IDS].join(', ')}; dropped`);
 
   const bytes = [...used, meta.preview, meta.thumbnail].filter(Boolean).reduce((n, rel) => n + (files.get(rel) ?? 0), 0);
-  return { id, meta, project, files, bytes };
+  return { id, meta, project, files, bytes, viewOnly };
 }
 
 function hasFfmpeg() {
@@ -286,12 +298,14 @@ async function main() {
 
   const entries = [];
   for (const t of read) {
-    const { id, meta, project, files } = t;
-    const resolved = mapStrings(project, s => {
-      if (s.startsWith('./assets/')) { const rel = s.slice(2); return fileUrl(id, rel, files.get(rel)); }
-      return /^(blob:|file:)/.test(s) ? '' : s;
-    });
-    await writeFile(join(DIST, 't', `${id}.json`), JSON.stringify(resolved));
+    const { id, meta, project, files, viewOnly } = t;
+    if (!viewOnly) {
+      const resolved = mapStrings(project, s => {
+        if (s.startsWith('./assets/')) { const rel = s.slice(2); return fileUrl(id, rel, files.get(rel)); }
+        return /^(blob:|file:)/.test(s) ? '' : s;
+      });
+      await writeFile(join(DIST, 't', `${id}.json`), JSON.stringify(resolved));
+    }
     let card = null;
     if (ffmpeg && meta.preview) {
       try { card = await cardFor(id, meta.preview); } catch (e) { console.warn(`warning  ${id}: could not cut its card clip: ${String(e.stderr ?? e.message).trim().slice(0, 200)}`); }
@@ -306,20 +320,21 @@ async function main() {
       tags: Array.isArray(meta.tags) ? meta.tags : [],
       ...(CATEGORY_IDS.has(meta.category) ? { category: meta.category } : {}),
       styles: Array.isArray(meta.styles) ? meta.styles.filter(st => STYLE_IDS.has(st)).slice(0, 3) : [],
-      slots: meta.slots && typeof meta.slots === 'object' ? meta.slots : countSlots(project),
+      slots: meta.slots && typeof meta.slots === 'object' ? meta.slots : viewOnly ? {} : countSlots(project),
       uses: Array.isArray(meta.uses) ? meta.uses : [],
       width: meta.width,
       height: meta.height,
       fps: meta.fps ?? 30,
       duration: meta.duration ?? 0,
-      projectUrl: `${site}/t/${id}.json`,
+      access: viewOnly ? 'view' : 'open',
+      ...(viewOnly ? (meta.buyUrl ? { buyUrl: meta.buyUrl } : {}) : { projectUrl: `${site}/t/${id}.json` }),
       ...(meta.preview ? { previewUrl: fileUrl(id, meta.preview, files.get(meta.preview)) } : {}),
       ...(meta.thumbnail ? { thumbnailUrl: fileUrl(id, meta.thumbnail, files.get(meta.thumbnail)) } : {}),
       bytes: t.bytes,
       // Paths relative to index.json: the gallery page's own small copies.
       ...(card ? { card } : {}),
       addedAt: addedAt(id),
-      openUrl: `${EDITOR}/?project-template=${id}`,
+      ...(viewOnly ? {} : { openUrl: `${EDITOR}/?project-template=${id}` }),
       sourceUrl: LOCAL ? '' : `https://github.com/${repo}/tree/main/templates/${id}`,
     });
   }

@@ -172,6 +172,9 @@ const reveal = new IntersectionObserver(entries => {
   }
 }, { rootMargin: '0px 0px -40px 0px' });
 
+/** Shown in the gallery, but its project is not published. */
+const viewOnly = t => t.access === 'view';
+
 function makeCard(t) {
   const still = poster(t);
   const media = el('button', {
@@ -205,10 +208,13 @@ function makeCard(t) {
   media.append(
     el('span', { class: 'badge badge--time', text: time(t.duration) }),
     isNew(t) ? el('span', { class: 'badge badge--new', text: 'New' }) : null,
+    viewOnly(t) ? el('span', { class: 'badge badge--view', text: 'View only' }) : null,
     el('span', { class: 'badge badge--live', text: shape(t) === 'Other' ? `${t.width}×${t.height}` : shape(t) }),
   );
 
-  const open = el('a', { class: 'card__open', href: t.openUrl, target: '_blank', rel: 'noopener', 'aria-label': `Open ${t.name} in GoatEdit` }, 'Use', svg(ARROW));
+  const open = viewOnly(t)
+    ? (t.buyUrl ? el('a', { class: 'card__open', href: t.buyUrl, target: '_blank', rel: 'noopener', 'aria-label': `Buy ${t.name}` }, 'Buy', svg(ARROW)) : null)
+    : el('a', { class: 'card__open', href: t.openUrl, target: '_blank', rel: 'noopener', 'aria-label': `Open ${t.name} in GoatEdit` }, 'Use', svg(ARROW));
 
   const card = el('article', {
     class: 'card',
@@ -419,17 +425,25 @@ function openViewer(t, { push = true } = {}) {
     ...t.tags.map(x => el('button', { class: 'chip', type: 'button', text: `#${x}`, onclick: jump(() => { search.value = x; }) })),
   ].filter(Boolean));
   $('v-specs').replaceChildren(...[
-    swapLine(t) ? spec('You change', swapLine(t)) : null,
+    swapLine(t) && !viewOnly(t) ? spec('You change', swapLine(t)) : null,
     spec('Frame', resolution(t)),
     spec('Rate', `${Math.round(t.fps * 100) / 100} fps`),
     spec('Length', time(t.duration)),
-    spec('Files', t.bytes ? size(t.bytes) : '—'),
+    viewOnly(t) ? spec('Access', 'View only') : spec('Files', t.bytes ? size(t.bytes) : '—'),
     spec('Shape', shape(t) === 'Other' ? `${t.width}:${t.height}` : shape(t)),
     spec('Licence', LICENCE_NAMES[t.license] ?? t.license),
   ].filter(Boolean));
+  // View-only: the project is not published, so the button goes to the
+  // seller (or the author's page) instead of the editor.
   const open = $('v-open');
-  open.href = t.openUrl;
+  const href = viewOnly(t) ? t.buyUrl ?? t.authorUrl : t.openUrl;
+  open.hidden = !href;
+  if (href) open.href = href;
   open.target = '_blank';
+  $('v-open-label').textContent = !viewOnly(t) ? 'Open in GoatEdit' : t.buyUrl ? 'Buy this template' : 'Contact the author';
+  $('v-hint').textContent = viewOnly(t)
+    ? 'View only. The author keeps the project; it does not open in the editor from here.'
+    : 'Opens as a new project. The original stays as it is.';
 
   const more = related(t);
   $('v-more-wrap').hidden = !more.length;
@@ -534,7 +548,7 @@ try {
   templates = (manifest.templates ?? []).filter(t => t && t.id && t.width > 0 && t.height > 0);
   CATEGORIES = Array.isArray(manifest.categories) ? manifest.categories : [];
   STYLES = Array.isArray(manifest.styles) ? manifest.styles : [];
-  $('eyebrow').textContent = templates.length ? `${templates.length} template${templates.length === 1 ? '' : 's'} · free to use` : 'Templates';
+  $('eyebrow').textContent = templates.length ? `${templates.length} template${templates.length === 1 ? '' : 's'}` : 'Templates';
   buildWall();
   apply();
   const linked = templates.find(t => `#${t.id}` === location.hash);

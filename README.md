@@ -46,6 +46,38 @@ Maintainers can still add one by hand: in the dialog, **Save as folder
 instead** writes the same folder; put it in `templates/`, check it with
 `npm run validate`, commit and push.
 
+## View-only templates
+
+To show an edit without giving away the project — say, to sell it — publish
+only the preview and mark it view-only:
+
+```json
+{ "access": "view", "buyUrl": "https://your-shop.example/item", "preview": "preview.mp4", … }
+```
+
+The folder holds `template.json`, `preview.mp4` and an optional thumbnail —
+**no `project.json` and no `assets/`**. This repository is public, so anything
+committed here can be downloaded; the build refuses a view-only template that
+has either. The gallery plays the preview, marks the card *View only*, and the
+viewer's button goes to `buyUrl` (or `authorUrl`). The editor does not list it.
+The buyer gets the project from the seller, not from here.
+
+## Removing a template
+
+Delete its folder and push:
+
+```bash
+git rm -r templates/<id>
+git commit -m "Remove <id>"
+git push
+```
+
+The next `Publish` run drops it from `index.json` and the gallery. Two things
+stay: the files in git history, and the commit-pinned CDN links, so projects
+people already opened from it keep working. To purge a file that should never
+have been public (personal information, a licence problem), rewrite history
+with `git filter-repo` and ask jsDelivr to purge the paths.
+
 ## Limits
 
 - **100 MB a file.** GitHub refuses anything bigger. Export footage at the size
