@@ -333,7 +333,7 @@ function apply() {
   renderFilters();
   layout();
   const filtered = q || activeShape || activeCat || activeStyles.size || activeSwap;
-  $('count').textContent = filtered ? `${shown.length} of ${templates.length}` : `${templates.length} template${templates.length === 1 ? '' : 's'}`;
+  $('count').textContent = filtered ? `${shown.length} found` : '';
   $('empty').hidden = shown.length > 0;
   $('empty-text').textContent = templates.length ? 'Try fewer words or another filter.' : 'No templates have been published yet.';
   $('clear').hidden = !filtered;
@@ -349,36 +349,7 @@ function clearFilters() {
 }
 $('clear').addEventListener('click', clearFilters);
 
-let scrolledToBoard = false;
-search.addEventListener('input', () => {
-  apply();
-  // Typing in the hero: bring the results into view once.
-  const board = $('browse').getBoundingClientRect();
-  if (!scrolledToBoard && board.top > innerHeight * 0.6) {
-    scrolledToBoard = true;
-    $('browse').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' });
-  }
-});
-
-// --- Hero wall ------------------------------------------------------------------
-
-function buildWall() {
-  const stills = templates.filter(poster);
-  if (!stills.length) return;
-  const wall = $('wall');
-  const rows = [0, 1, 2].map(r => {
-    // Enough frames to overfill the widest screen, then the same again so the loop is seamless.
-    const order = stills.map((_, i) => stills[(i + r) % stills.length]);
-    const run = [];
-    while (run.length < 9) run.push(...order);
-    return el('div', { class: 'wall__row', style: { '--dur': `${70 + r * 25}s` } },
-      ...[...run, ...run].map(t => el('img', { src: poster(t), alt: '', decoding: 'async', style: { '--ar': `${t.width} / ${t.height}` } })));
-  });
-  wall.replaceChildren(...rows);
-  const first = wall.querySelector('img');
-  const ready = () => wall.classList.add('is-ready');
-  first.complete ? ready() : first.addEventListener('load', ready, { once: true });
-}
+search.addEventListener('input', apply);
 
 // --- Viewer ----------------------------------------------------------------------
 
@@ -548,8 +519,6 @@ try {
   templates = (manifest.templates ?? []).filter(t => t && t.id && t.width > 0 && t.height > 0);
   CATEGORIES = Array.isArray(manifest.categories) ? manifest.categories : [];
   STYLES = Array.isArray(manifest.styles) ? manifest.styles : [];
-  $('eyebrow').textContent = templates.length ? `${templates.length} template${templates.length === 1 ? '' : 's'}` : 'Templates';
-  buildWall();
   apply();
   const linked = templates.find(t => `#${t.id}` === location.hash);
   if (linked) openViewer(linked, { push: false });
