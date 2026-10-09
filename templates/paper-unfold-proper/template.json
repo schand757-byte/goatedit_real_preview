@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "paper-unfold-proper",
+  "name": "paper unfold proper",
+  "description": "",
+  "author": "God",
+  "license": "CC-BY-4.0",
+  "tags": [
+    "paper unfold"
+  ],
+  "category": "logo-reveal",
+  "styles": [
+    "glitch"
+  ],
+  "slots": {
+    "footage": 2,
+    "images": 1,
+    "texts": 0
+  },
+  "uses": [
+    "pixel dissolve",
+    "dither"
+  ],
+  "width": 1280,
+  "height": 720,
+  "fps": 25,
+  "duration": 5.21,
+  "thumbnail": "thumb.jpg",
+  "kind": "design"
+}
