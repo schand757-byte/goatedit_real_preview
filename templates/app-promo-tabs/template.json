@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "app-promo-tabs",
+  "name": "App promo with chapter tabs",
+  "description": "A 44-second app launch promo: a rounded window over a purple glow, chapter tabs (Intro, Problem, Use Case, Call to Action) that light up as the story moves, kinetic one-liners, a logo reveal, monitor and phone mockups. Swap the placeholder pictures for your footage and type your app's name.",
+  "author": "gauravtiwari596",
+  "license": "CC-BY-4.0",
+  "tags": ["app promo", "product launch", "saas", "chapters"],
+  "category": "promo",
+  "styles": ["minimal", "cinematic"],
+  "uses": ["kinetic type", "masks", "blur", "glow", "motion blur", "motion graphics"],
+  "width": 1440,
+  "height": 1080,
+  "fps": 30,
+  "duration": 44.4
+}
