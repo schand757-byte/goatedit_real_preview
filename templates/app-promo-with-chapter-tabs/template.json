@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "app-promo-with-chapter-tabs",
+  "name": "App promo with chapter tabs",
+  "description": "",
+  "author": "rahul",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "category": "promo",
+  "styles": [
+    "3d",
+    "neon",
+    "glitch"
+  ],
+  "slots": {
+    "footage": 11,
+    "images": 25,
+    "texts": 53
+  },
+  "uses": [
+    "glow",
+    "masks",
+    "deep glow",
+    "vhs",
+    "3d layer",
+    "film grain",
+    "kinetic type",
+    "liquid glass",
+    "ripple",
+    "light rays",
+    "camera shake",
+    "captions",
+    "3d model",
+    "zoom blur",
+    "box blur",
+    "colorama"
+  ],
+  "width": 1440,
+  "height": 1080,
+  "fps": 30,
+  "duration": 44.4,
+  "preview": "preview.mp4"
+}
