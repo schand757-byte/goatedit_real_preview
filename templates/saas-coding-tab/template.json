@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "saas-coding-tab",
+  "name": "Saas coding tab",
+  "description": "",
+  "author": "God",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "category": "promo",
+  "styles": [
+    "3d",
+    "cinematic",
+    "playful"
+  ],
+  "slots": {
+    "footage": 1,
+    "images": 1,
+    "texts": 1
+  },
+  "uses": [
+    "captions",
+    "kinetic type",
+    "blur",
+    "vignette",
+    "3d model",
+    "pixel dissolve",
+    "colorama",
+    "dither",
+    "blob tracker",
+    "grid split",
+    "rgb split",
+    "scatter",
+    "fractal noise",
+    "liquid glass",
+    "motion graphics"
+  ],
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "duration": 5.33,
+  "preview": "preview.mp4"
+}
